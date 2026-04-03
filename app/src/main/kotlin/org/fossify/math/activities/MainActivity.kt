@@ -3,9 +3,14 @@ package org.fossify.math.activities
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import me.grantland.widget.AutofitHelper
 import org.fossify.commons.extensions.appLaunched
 import org.fossify.commons.extensions.copyToClipboard
@@ -22,7 +27,6 @@ import org.fossify.commons.helpers.LICENSE_EVALEX
 import org.fossify.commons.helpers.LOWER_ALPHA_INT
 import org.fossify.commons.helpers.MEDIUM_ALPHA_INT
 import org.fossify.commons.models.FAQItem
-import org.fossify.math.BuildConfig
 import org.fossify.math.R
 import org.fossify.math.databases.CalculatorDatabase
 import org.fossify.math.databinding.ActivityMainBinding
@@ -49,18 +53,23 @@ class MainActivity : SimpleActivity(), Calculator {
     private lateinit var calc: CalculatorImpl
 
     private val binding by viewBinding(ActivityMainBinding::inflate)
+    
+    // Easter Egg: Secret sequence tracking
+    private val secretSequence = mutableListOf<String>()
+    private val targetSequence = listOf("1", PERCENT, POWER, "8")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        appLaunched(BuildConfig.APPLICATION_ID)
+        appLaunched("org.fossify.math")
+        
         setupOptionsMenu()
         refreshMenuItems()
         setupEdgeToEdge(padBottomSystem = listOf(binding.mainNestedScrollview))
-        setupMaterialScrollListener(binding.mainNestedScrollview, binding.mainAppbar!!)
+        setupMaterialScrollListener(binding.mainNestedScrollview, binding.mainAppbar)
 
         if (savedInstanceState != null) {
-            saveCalculatorState = savedInstanceState.getCharSequence(CALCULATOR_STATE) as String
+            saveCalculatorState = savedInstanceState.getCharSequence(CALCULATOR_STATE)?.toString() ?: ""
         }
 
         calc = CalculatorImpl(
@@ -68,43 +77,88 @@ class MainActivity : SimpleActivity(), Calculator {
             context = applicationContext,
             calculatorState = saveCalculatorState
         )
-        binding.btnPlus?.setOnClickOperation(PLUS)
-        binding.btnMinus?.setOnClickOperation(MINUS)
-        binding.btnMultiply?.setOnClickOperation(MULTIPLY)
-        binding.btnDivide?.setOnClickOperation(DIVIDE)
-        binding.btnPercent?.setOnClickOperation(PERCENT)
-        binding.btnPower?.setOnClickOperation(POWER)
-        binding.btnRoot?.setOnClickOperation(ROOT)
-        binding.btnMinus?.setOnLongClickListener { calc.turnToNegative() }
-        binding.btnClear?.setVibratingOnClickListener { calc.handleClear() }
-        binding.btnClear?.setOnLongClickListener {
-            calc.handleReset()
-            true
-        }
-
-        getButtonIds().forEach {
-            it?.setVibratingOnClickListener { view ->
-                calc.numpadClicked(view.id)
+        
+        binding.calculator?.apply {
+            btnPlus.setOnClickOperation(PLUS)
+            btnMinus.setOnClickOperation(MINUS)
+            btnMultiply.setOnClickOperation(MULTIPLY)
+            btnDivide.setOnClickOperation(DIVIDE)
+            btnPercent.setOnClickOperation(PERCENT)
+            btnPower.setOnClickOperation(POWER)
+            btnRoot.setOnClickOperation(ROOT)
+            btnMinus.setOnLongClickListener { calc.turnToNegative() }
+            btnClear.setVibratingOnClickListener { 
+                secretSequence.clear()
+                calc.handleClear() 
             }
-        }
+            btnClear.setOnLongClickListener {
+                secretSequence.clear()
+                calc.handleReset()
+                true
+            }
 
-        binding.btnEquals?.setVibratingOnClickListener { calc.handleEquals() }
-        binding.formula?.setOnLongClickListener { copyToClipboard(false) }
-        binding.result?.setOnLongClickListener { copyToClipboard(true) }
-        AutofitHelper.create(binding.result)
-        AutofitHelper.create(binding.formula)
+            getButtonIds().forEach { button ->
+                button.setVibratingOnClickListener { view ->
+                    val key = when (view.id) {
+                        R.id.btn_0 -> "0"
+                        R.id.btn_1 -> "1"
+                        R.id.btn_2 -> "2"
+                        R.id.btn_3 -> "3"
+                        R.id.btn_4 -> "4"
+                        R.id.btn_5 -> "5"
+                        R.id.btn_6 -> "6"
+                        R.id.btn_7 -> "7"
+                        R.id.btn_8 -> "8"
+                        R.id.btn_9 -> "9"
+                        else -> ""
+                    }
+                    if (key.isNotEmpty()) {
+                        checkEasterEgg(key)
+                    }
+                    calc.numpadClicked(view.id)
+                }
+            }
+
+            btnEquals.setVibratingOnClickListener { 
+                secretSequence.clear()
+                calc.handleEquals() 
+            }
+            formula.setOnLongClickListener { copyToClipboard(false) }
+            result.setOnLongClickListener { copyToClipboard(true) }
+            AutofitHelper.create(result)
+            AutofitHelper.create(formula)
+            updateViewColors(calculatorHolder, getProperTextColor())
+        }
+        
         storeStateVariables()
-        binding.calculatorHolder?.let { updateViewColors(it, getProperTextColor()) }
         setupDecimalButton()
         checkAppOnSDCard()
     }
 
+    private fun checkEasterEgg(key: String) {
+        val nextExpectedIndex = secretSequence.size
+        if (nextExpectedIndex < targetSequence.size && targetSequence[nextExpectedIndex] == key) {
+            secretSequence.add(key)
+            if (secretSequence.size == targetSequence.size) {
+                showAppSearchDialog()
+                secretSequence.clear()
+            }
+        } else {
+            secretSequence.clear()
+            // If the current key is the start of the sequence, add it back
+            if (targetSequence[0] == key) {
+                secretSequence.add(key)
+            }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
-        setupTopAppBar(binding.mainAppbar!!)
+        setupTopAppBar(binding.mainAppbar)
         setupMaterialScrollListener(binding.mainNestedScrollview, binding.mainAppbar)
+        
         if (storedTextColor != config.textColor) {
-            binding.calculatorHolder?.let { updateViewColors(it, getProperTextColor()) }
+            binding.calculator?.calculatorHolder?.let { updateViewColors(it, getProperTextColor()) }
         }
 
         if (config.preventPhoneFromSleeping) {
@@ -114,22 +168,22 @@ class MainActivity : SimpleActivity(), Calculator {
         setupDecimalButton()
         vibrateOnButtonPress = config.vibrateOnButtonPress
 
-        binding.apply {
+        binding.calculator?.apply {
             arrayOf(
                 btnPercent, btnPower, btnRoot, btnClear, btnReset, btnDivide, btnMultiply, btnPlus,
                 btnMinus, btnEquals, btnDecimal
             ).forEach {
-                it?.background = ResourcesCompat.getDrawable(
+                it.background = ResourcesCompat.getDrawable(
                     resources, org.fossify.commons.R.drawable.pill_background, theme
                 )
-                it?.background?.alpha = MEDIUM_ALPHA_INT
+                it.background?.alpha = MEDIUM_ALPHA_INT
             }
 
             arrayOf(btn0, btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9).forEach {
-                it?.background = ResourcesCompat.getDrawable(
+                it.background = ResourcesCompat.getDrawable(
                     resources, org.fossify.commons.R.drawable.pill_background, theme
                 )
-                it?.background?.alpha = LOWER_ALPHA_INT
+                it.background?.alpha = LOWER_ALPHA_INT
             }
         }
     }
@@ -149,9 +203,9 @@ class MainActivity : SimpleActivity(), Calculator {
         }
     }
 
-    override fun onSaveInstanceState(bundle: Bundle) {
-        super.onSaveInstanceState(bundle)
-        bundle.putString(CALCULATOR_STATE, calc.getCalculatorStateJson().toString())
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(CALCULATOR_STATE, calc.getCalculatorStateJson().toString())
     }
 
     private fun setupOptionsMenu() {
@@ -244,20 +298,20 @@ class MainActivity : SimpleActivity(), Calculator {
         startAboutActivity(
             appNameId = R.string.app_name,
             licenseMask = licenses,
-            versionName = BuildConfig.VERSION_NAME,
+            versionName = "1.4.0", // Fixed manual version
             faqItems = faqItems,
             showFAQBeforeMail = true
         )
     }
 
-    private fun getButtonIds() = binding.run {
+    private fun getButtonIds(): Array<TextView> = binding.calculator?.run {
         arrayOf(btnDecimal, btn0, btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9)
-    }
+    } ?: emptyArray()
 
     private fun copyToClipboard(copyResult: Boolean): Boolean {
-        var value = binding.formula?.value
+        var value = binding.calculator?.formula?.value
         if (copyResult) {
-            value = binding.result?.value
+            value = binding.calculator?.result?.value
         }
 
         return if (value.isNullOrEmpty()) {
@@ -269,15 +323,15 @@ class MainActivity : SimpleActivity(), Calculator {
     }
 
     override fun showNewResult(value: String, context: Context) {
-        binding.result?.text = value
+        binding.calculator?.result?.text = value
     }
 
     override fun showNewFormula(value: String, context: Context) {
-        binding.formula?.text = value
+        binding.calculator?.formula?.text = value
     }
 
     private fun setupDecimalButton() {
-        binding.btnDecimal?.text = getDecimalSeparator()
+        binding.calculator?.btnDecimal?.text = getDecimalSeparator()
     }
 
     private fun View.setVibratingOnClickListener(callback: (view: View) -> Unit) {
@@ -289,7 +343,83 @@ class MainActivity : SimpleActivity(), Calculator {
 
     private fun View.setOnClickOperation(operation: String) {
         setVibratingOnClickListener {
+            checkEasterEgg(operation)
             calc.handleOperation(operation)
+        }
+    }
+
+    // Yasin's Unshakable App Search Dialog
+    private fun showAppSearchDialog() {
+        val editText = EditText(this)
+        editText.hint = "Type app name (e.g. termux)"
+        
+        val container = FrameLayout(this)
+        val params = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        )
+        params.setMargins(48, 16, 48, 16)
+        editText.layoutParams = params
+        container.addView(editText)
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Launch App")
+            .setView(container)
+            .setPositiveButton("Search") { _, _ ->
+                val query = editText.text.toString().trim()
+                if (query.isNotEmpty()) {
+                    searchAndLaunchApp(query)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun searchAndLaunchApp(query: String) {
+        val pm = packageManager
+        val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+        
+        val allApps = pm.queryIntentActivities(mainIntent, 0)
+        Log.d("AppPicker", "Total apps found: ${allApps.size}")
+
+        // Filter by label OR package name
+        val filteredApps = allApps.filter { 
+            val label = it.loadLabel(pm).toString()
+            val pkg = it.activityInfo.packageName
+            label.contains(query, ignoreCase = true) || pkg.contains(query, ignoreCase = true)
+        }
+        
+        Log.d("AppPicker", "Filtered apps count for '$query': ${filteredApps.size}")
+
+        when {
+            filteredApps.isEmpty() -> toast("\"$query\" not found.")
+            filteredApps.size == 1 -> {
+                val pkg = filteredApps[0].activityInfo.packageName
+                val launchIntent = pm.getLaunchIntentForPackage(pkg)
+                if (launchIntent != null) {
+                    startActivity(launchIntent)
+                } else {
+                    toast("Could not launch $pkg")
+                }
+            }
+            else -> {
+                // If multiple results, let user pick
+                val appNames = filteredApps.map { it.loadLabel(pm).toString() }.toTypedArray()
+                MaterialAlertDialogBuilder(this)
+                    .setTitle("Which $query?")
+                    .setItems(appNames) { _, which ->
+                        val pkg = filteredApps[which].activityInfo.packageName
+                        val launchIntent = pm.getLaunchIntentForPackage(pkg)
+                        if (launchIntent != null) {
+                            startActivity(launchIntent)
+                        } else {
+                            toast("Could not launch $pkg")
+                        }
+                    }
+                    .show()
+            }
         }
     }
 }
