@@ -2,7 +2,7 @@
 #jetbrains
 kotlin = "2.3.10"
 #KSP
-ksp = "2.3.6"
+ksp = "2.3.8"
 #Detekt
 detekt = "1.23.8"
 detektCompose = "0.4.28"
@@ -17,13 +17,13 @@ composeMaterial3 = "1.4.0"
 #AutoFitTextView
 autofittextview = "0.2.1"
 #EvalEx
-evalex = "3.6.0"
+evalex = "3.6.1"
 #Room
 room = "2.8.4"
 #Fossify
 commons = "6.1.6"
 #Gradle
-gradlePlugins-agp = "9.1.0"
+gradlePlugins-agp = "9.2.1"
 #build
 app-build-compileSDKVersion = "36"
 app-build-targetSDK = "36"
